@@ -515,16 +515,26 @@ def weekly_automation():
             for account in new_follows:
                 handle = platform.extract_handle(account)
                 if not handle:
+                    logger.debug(f"    SKIP: No handle found in account data: {account}")
                     continue
 
                 if handle.lower() in existing_handles:
                     batch_duplicates += 1
+                    logger.debug(f"    SKIP: {handle} - Already in database")
                     continue
 
                 followers_count = account.get('followersCount', 0)
                 created_at = account.get('registerDate', '')
+                weeks_old = platform.calculate_account_age_weeks(created_at)
 
-                if followers_count > 5000 or platform.calculate_account_age_weeks(created_at) > 104:
+                logger.info(f"    Checking {handle}: followers={followers_count}, age_weeks={weeks_old}")
+
+                if followers_count > 5000:
+                    logger.info(f"    SKIP: {handle} - Too many followers ({followers_count})")
+                    continue
+                
+                if weeks_old > 104:
+                    logger.info(f"    SKIP: {handle} - Too old ({weeks_old} weeks)")
                     continue
 
                 try:
@@ -534,8 +544,12 @@ def weekly_automation():
                         batch_new_discoveries.append(scored_account)
                         existing_handles.add(handle.lower())
                         print(f"    ✅ {handle}: {scored_account['total_score']} points")
+                    else:
+                        logger.info(f"    SKIP: {handle} - Score too low ({scored_account['total_score']} < 200)")
                 except Exception as e:
-                    logger.error(f"Error scoring {handle}: {e}")
+                    logger.error(f"    ERROR scoring {handle}: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
                     continue
 
             time.sleep(1.0)
